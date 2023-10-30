@@ -49,6 +49,7 @@ def load_model(action):
         model_reloaded.fc = nn.Linear(num_ftrs, 2)  # Match the number of classes
         model_reloaded.load_state_dict(torch.load('posture_detection.pth', map_location=torch.device("cpu")))
     model_reloaded.eval()
+    return model_reloaded
     
 def lambda_handler(event, context):
     try:
@@ -92,22 +93,22 @@ def lambda_handler(event, context):
                         image = image.unsqueeze(0)  # Add batch dimension
 
                         # Load Activity Classification Model
-                        model = load_model(0)
+                        model_activity = load_model(0)
 
                         # Perform inference for Activity Classification
                         with torch.no_grad():
-                            outputs = model(image)
+                            outputs = model_activity(image)
                             _, predicted = torch.max(outputs, 1)
                             predicted_activity = activity_labels[predicted.item()]
 
                         logger.info(f"Predicted label (activity): {predicted_activity}")
 
                         # Load Posture Classification Model
-                        model = load_model(1)
+                        model_posture = load_model(1)
 
                         # Perform inference for Posture Classification
                         with torch.no_grad():
-                            outputs = model(image)
+                            outputs = model_posture(image)
                             _, predicted = torch.max(outputs, 1)
                             predicted_posture = posture_labels[predicted.item()]
 
