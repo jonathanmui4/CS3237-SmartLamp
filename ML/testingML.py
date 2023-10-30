@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 from torchvision import models, transforms
 from torchvision.models import ResNet18_Weights
-import torch.onnx
 
 # Function to load and transform an image
 def load_image(image_path, transform):
