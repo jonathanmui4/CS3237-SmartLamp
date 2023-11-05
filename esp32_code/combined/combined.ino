@@ -39,11 +39,8 @@ uint8_t brightness = 0; //brightness indicator for breathing effect
 int flag_up = 1;
 
 float max(float x, float y){
-    if(x > y){
-        return x;
-    }else{
-        return y;
-    }
+    if(x > y){return x;}
+    else{return y;}
 }
 
 
@@ -99,58 +96,100 @@ WiFiClientSecure client;
 UniversalTelegramBot bot(BOTtoken, client);
 
 
+//--------- RTOS related parameters ----------
+hw_timer_t *My_timer = NULL;
+int initiateConnect = 1;
 
-void setup() {
-  Serial.begin(115200);
-  delay(3000); 
-
-  // tell FastLED about the LED strip configuration
-  //FastLED.addLeds<LED_TYPE,DATA_PIN,COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
-    
-  // testing with single LED
-    ledcSetup(LEDCHANNEL, LEDFREQ, LEDRESOLUTION); 
-    ledcAttachPin(LEDPIN, LEDCHANNEL); 
-    ledcWrite(LEDCHANNEL, BRIGHTNESS);
-
-  // wait for WiFi connection
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid, pass);
-    WiFi.setHostname("c3test");
-    Serial.print("Connecting to WiFi");
-    while (WiFi.status() != WL_CONNECTED) {
-        Serial.print('.');
-        delay(1000);
-    }
-
-
-  // wait for MQTT connection
-    log_i();
-    log_i("setup, ESP.getSdkVersion(): ");
-    log_i("%s", ESP.getSdkVersion());
-    mqttClient.enableDebuggingMessages();
-    mqttClient.setURI(server);
-    mqttClient.enableLastWillMessage("lwt", "I am going offline");
-    mqttClient.setKeepAlive(30);
-    mqttClient.loopStart();
-    Serial.print("Connecting to MQTT broker");
-    while (!mqttClient.isConnected()) {
-        Serial.print('.');
-        delay(1000);
-    }
-
-  // telegram bot start up
-    client.setCACert(TELEGRAM_CERTIFICATE_ROOT); // Add root certificate for api.telegram.org
-    bot.sendMessage(CHAT_ID, "Bot started up", "");
-
-  // initialize OLED
-    display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the 64x48)
-    display.clearDisplay();
-
-    delay(10000);
+void onConnectionEstablishedCallback(esp_mqtt_client_handle_t client) {
+  vTaskDelay(10);
+}
+esp_err_t handleMQTT(esp_mqtt_event_handle_t event) {
+  mqttClient.onEventCallback(event);
+  return ESP_OK;
+}
+void IRAM_ATTR onTimer() {
+  initiateConnect = 1;
 }
 
-void loop()
-{ 
+String msg;
+int received = 0;
+int sendReady = 0;
+
+//--------- MQTT handler ----------------------
+void handleMqtt(void *parameter) {
+  while (1) {
+    if (initiateConnect == 1) {
+
+    // wait for WiFi connection
+      WiFi.mode(WIFI_STA);
+      WiFi.begin(ssid, pass);
+      WiFi.setHostname("c3test");
+      Serial.print("Connecting to WiFi");
+      while (WiFi.status() != WL_CONNECTED) {
+          Serial.print('.');
+          delay(1000);
+      }
+
+    // wait for MQTT connection
+      log_i();
+      log_i("setup, ESP.getSdkVersion(): ");
+      log_i("%s", ESP.getSdkVersion());
+      mqttClient.enableDebuggingMessages();
+      mqttClient.setURI(server);
+      mqttClient.enableLastWillMessage("lwt", "I am going offline");
+      mqttClient.setKeepAlive(30);
+      mqttClient.loopStart();
+      Serial.print("Connecting to MQTT broker");
+      while (!mqttClient.isConnected()) {
+          Serial.print('.');
+          delay(1000);
+      }
+
+
+      Serial.println("Connected!");
+      initiateConnect = 0;
+
+      while (mqttClient.isConnected()) {
+        if (sendReady == 0) {
+          msg = "Ready!";
+          mqttClient.publish("ready/bar", msg, 0, false);
+          Serial.println(msg);
+          sendReady = 1;
+        }
+        mqttClient.subscribe(subscribeTopic, [](const String &payload)
+                             {Serial.printf("From %s received message: %s\n", subscribeTopic, payload.c_str()); 
+                             if(strcmp(payload.c_str(), "sitting")==0){posture=1; oled_state=1;}
+                             if(strcmp(payload.c_str(), "crouching")==0){posture=2; oled_state=2;}
+                             if(strcmp(payload.c_str(), "sleeping")==0){posture=3; oled_state=3; brightness=0;}
+                             if(strcmp(payload.c_str(), "playphone")==0){posture=4; oled_state=2;}
+                             if(strcmp(payload.c_str(), "empty")==0){posture=5; oled_state=0;}
+                             Serial.println(posture);
+                             Serial.println(oled_state);
+                             loop_flag = 0;
+                             received = 1;
+                             });
+ 
+        if (received == 1) {
+          Serial.println("Received!");
+          WiFi.disconnect();
+          while (WiFi.status() == WL_CONNECTED) {
+            vTaskDelay(1);
+            Serial.print("Wifi Disconnecting...");
+          }
+          received = 0;
+          sendReady = 0;
+        }
+      }
+      //vTaskDelete(NULL);
+    }
+    vTaskDelay(1);
+  }
+}
+
+
+//--------- LED handler --------------
+void handleLED(void *parameter) {
+  while (1) {
   BRIGHTNESS = max(96 + 0.5 * (600 - analogRead(PHOTO_PIN)), 0.0);
   // posture flag associated with LED light-up mode and brightness
   if (posture==0 || posture==1){
@@ -246,7 +285,69 @@ void loop()
     }
   }
   count = (count + 1) % 1000;
-  delay(1);
+  vTaskDelay(1);
+  }
+}
+
+
+void setup() {
+  Serial.begin(115200);
+  delay(3000); 
+
+  // tell FastLED about the LED strip configuration
+  //FastLED.addLeds<LED_TYPE,DATA_PIN,COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
+    
+  // testing with single LED
+    ledcSetup(LEDCHANNEL, LEDFREQ, LEDRESOLUTION); 
+    ledcAttachPin(LEDPIN, LEDCHANNEL); 
+    ledcWrite(LEDCHANNEL, BRIGHTNESS);
+
+    My_timer = timerBegin(0, 80, true);
+    timerAttachInterrupt(My_timer, &onTimer, true);
+    timerAlarmWrite(My_timer, 1000000 * 20, true);
+    timerAlarmEnable(My_timer);  //Just Enable
+
+    // tell FastLED about the LED strip configuration
+    FastLED.addLeds<LED_TYPE, DATA_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
+    //FastLED.addLeds<LED_TYPE,DATA_PIN,CLK_PIN,COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
+
+    // telegram bot start up
+      client.setCACert(TELEGRAM_CERTIFICATE_ROOT); // Add root certificate for api.telegram.org
+      bot.sendMessage(CHAT_ID, "Bot started up", "");
+
+    // initialize OLED
+      display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the 64x48)
+      display.clearDisplay();
+
+
+    // Task to run forever
+    xTaskCreatePinnedToCore(  // Use xTaskCreate() in vanilla FreeRTOS
+      handleMqtt,             // Function to be called
+      "Handle Mqtt",          // Name of task
+      4096,                   // Stack size (bytes in ESP32, words in FreeRTOS)
+      NULL,                   // Parameter to pass to function
+      1,                      // Task priority (0 to configMAX_PRIORITIES - 1)
+      NULL,                   // Task handle
+      tskNO_AFFINITY);        // Run on one core for demo purposes (ESP32 only)
+
+    xTaskCreatePinnedToCore(  // Use xTaskCreate() in vanilla FreeRTOS
+      handleLED,              // Function to be called
+      "Handle LEDs",          // Name of task
+      4096,                   // Stack size (bytes in ESP32, words in FreeRTOS)
+      NULL,                   // Parameter to pass to function
+      1,                      // Task priority (0 to configMAX_PRIORITIES - 1)
+      NULL,                   // Task handle
+      tskNO_AFFINITY);        // Run on one core for demo purposes (ESP32 only)
+
+    //connectWifiandMqtt();
+    //vTaskDelete(NULL);
+
+    delay(10000);
+}
+
+void loop()
+{ 
+
 }
 
 void draw(const unsigned char* experession){
@@ -255,41 +356,5 @@ void draw(const unsigned char* experession){
   display.clearDisplay();
 }
 
-void onConnectionEstablishedCallback(esp_mqtt_client_handle_t client)
-{
-    if (mqttClient.isMyTurn(client)) // can be omitted if only one client
-    {
-        mqttClient.subscribe(subscribeTopic, [](const String &payload)
-                             {Serial.printf("From %s received message: %s\n", subscribeTopic, payload.c_str()); 
-                             if(strcmp(payload.c_str(), "sitting")==0){posture=1; oled_state=1;}
-                             if(strcmp(payload.c_str(), "crouching")==0){posture=2; oled_state=2;}
-                             if(strcmp(payload.c_str(), "sleeping")==0){posture=3; oled_state=3; brightness=0;}
-                             if(strcmp(payload.c_str(), "playphone")==0){posture=4; oled_state=2;}
-                             if(strcmp(payload.c_str(), "empty")==0){posture=5; oled_state=0;}
-                             Serial.println(posture);
-                             Serial.println(oled_state);
-                             loop_flag = 0;
-                             });
-// {0: default, 1:'sitting', 2:'crouching', 3:'sleeping', 4:'playphone', 5:'empty'}
 
-        mqttClient.subscribe("bar/#", [](const String &topic, const String &payload)
-                             {Serial.printf("From %s received message: %s\n", subscribeTopic, payload.c_str()); 
-                             if(strcmp(payload.c_str(), "sitting")==0){posture=1; oled_state=1;}
-                             if(strcmp(payload.c_str(), "crouching")==0){posture=2; oled_state=2;}
-                             if(strcmp(payload.c_str(), "sleeping")==0){posture=3; oled_state=3; brightness=0;}
-                             if(strcmp(payload.c_str(), "playphone")==0){posture=4; oled_state=2;}
-                             if(strcmp(payload.c_str(), "empty")==0){posture=5; oled_state=0;}
-                             Serial.println(posture);
-                             Serial.println(oled_state);
-                             loop_flag = 0;
-                             });
-
-    }
-}
-
-esp_err_t handleMQTT(esp_mqtt_event_handle_t event)
-{
-    mqttClient.onEventCallback(event);
-    return ESP_OK;
-}
 
