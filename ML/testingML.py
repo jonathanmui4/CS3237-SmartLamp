@@ -1,5 +1,6 @@
 import numpy as np
 from PIL import Image
+import pickle
 import torch
 import torch.nn as nn
 from torchvision import models, transforms
@@ -22,7 +23,10 @@ def test_activity():
 
     # Step 3: Load the saved state dictionary
     # Map the device to cpu if it is online, else use the mac GPU
-    model_reloaded.load_state_dict(torch.load('activity_detection.pth', map_location=torch.device("mps" if torch.backends.mps.is_available() else "cpu")))
+    with open('activity_detection.pkl', 'rb') as f:
+        model_state = pickle.load(f)
+    model_reloaded.load_state_dict(model_state)
+    # model_reloaded.load_state_dict(torch.load('activity_detection.pth', map_location=torch.device("mps" if torch.backends.mps.is_available() else "cpu")))
 
     # Step 4: Set the model to evaluation mode if you're doing inference
     model_reloaded.eval()
