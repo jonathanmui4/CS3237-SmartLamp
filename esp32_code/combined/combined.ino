@@ -127,7 +127,7 @@ void mqttLoopTask(void *pvParameters) {
   Serial.print("task running on core ");
   Serial.println(xPortGetCoreID());
   for (;;) {
-    if (!mqttClient.connected()) {
+    if (!mqttClient.connect("ESP32_test")) {
       Serial.println("MQTT disconnected.");
       //connectToAWS();  // Reconnect to AWS
     } else {
@@ -234,13 +234,21 @@ void handleMqtt(void *parameter) {
       Serial.println("Connected!");
 
 
-      while (mqttClient.connected()) {
+      while (mqttClient.connect("ESP32_test")) {
         // if (sendReady == 0) {
         //   msg = "Ready!";
         //   mqttClient.publish("ready/bar", msg, 0, false);
         //   Serial.println(msg);
         //   sendReady = 1;
         // }
+
+        if (!mqttClient.connect("ESP32_test")) {
+            Serial.println("MQTT disconnected.");
+            //connectToAWS();  // Reconnect to AWS
+            } else {
+            Serial.println("MQTT connected.");
+            mqttClient.loop();
+        }
 
 
         if (receivedActivity && receivedPosture) {
@@ -261,6 +269,13 @@ void handleMqtt(void *parameter) {
       }
       //vTaskDelete(NULL);
     }
+    // if (!mqttClient.connect("ESP32_test")) {
+    //   Serial.println("MQTT disconnected.");
+    //   //connectToAWS();  // Reconnect to AWS
+    // } else {
+    //   Serial.println("MQTT connected.");
+    //   mqttClient.loop();
+    // }
     vTaskDelay(1);
   }
 }
@@ -403,9 +418,9 @@ void setup() {
     NULL,                   // Parameter to pass to function
     1,                      // Task priority (0 to configMAX_PRIORITIES - 1)
     NULL,                   // Task handle
-    0);        // Run on one core for demo purposes (ESP32 only)
+    1);        // Run on one core for demo purposes (ESP32 only)
 
-  xTaskCreatePinnedToCore(mqttLoopTask, "MQTTTask", 10000, NULL, 1, NULL, 1);
+  //xTaskCreatePinnedToCore(mqttLoopTask, "MQTTTask", 10000, NULL, 1, NULL, 1);
   //connectWifiandMqtt();
   //vTaskDelete(NULL);
 
