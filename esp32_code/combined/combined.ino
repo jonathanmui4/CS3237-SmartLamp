@@ -1,7 +1,6 @@
 
 #include "Arduino.h"
 #include <WiFi.h>
-#include "ESP32MQTTClient.h"
 #include <FastLED.h>
 #include <string.h>
 #include <WiFiClientSecure.h>
@@ -11,6 +10,9 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include "secrets.h"  // AWS credentials and certificates
+#include <MQTTClient.h>
+
 
 FASTLED_USING_NAMESPACE
 
@@ -85,15 +87,85 @@ int posture = 0;
 int count = 0;
 
 //--------- WiFi and MQTT settings -----------
-const char *ssid = "haihong";
-const char *pass = "yuhaihong";
-char *server = "mqtt://172.20.10.2:1883";
+// const char *ssid = "haihong";
+// const char *pass = "yuhaihong";
+// char *server = "mqtt://172.20.10.2:1883";
+
+WiFiClientSecure net = WiFiClientSecure();
+MQTTClient mqttClient = MQTTClient(20000);
+
 
 char *subscribeTopic1 = "laptop/activity";
 char *subscribeTopic2 = "laptop/posture";
 char *publishTopic = "hello/esp";
 
-ESP32MQTTClient mqttClient;  // all params are set later
+// ESP32MQTTClient mqttClient;  // all params are set later
+
+//--------- For AWS MQTT ------------
+
+void connectToAWS() {
+  // Configure WiFiClientSecure to use the AWS IoT device credentials
+  net.setCACert(AWS_CERT_CA);
+  net.setCertificate(AWS_CERT_CRT);
+  net.setPrivateKey(AWS_CERT_PRIVATE);
+  // Connect to the MQTT broker on the AWS endpoint we defined earlier
+  mqttClient.begin(AWS_IOT_ENDPOINT, 8883, net);
+  // create a call back to receive messages
+  mqttClient.onMessage(messageHandler);
+  Serial.print("Connecting to AWS IoT");
+  while (!mqttClient.connect("ESP32_test")) {
+    Serial.print(".");
+    vTaskDelay(100);
+  }
+  // Subscribe to a topic
+  mqttClient.subscribe(subscribeTopic1);
+  mqttClient.subscribe(subscribeTopic2);
+  Serial.println("AWS IoT Connected!");
+}
+
+void mqttLoopTask(void *pvParameters) {
+  Serial.print("task running on core ");
+  Serial.println(xPortGetCoreID());
+  for (;;) {
+    if (!mqttClient.connected()) {
+      Serial.println("MQTT disconnected.");
+      //connectToAWS();  // Reconnect to AWS
+    } else {
+      Serial.println("MQTT connected.");
+      mqttClient.loop();
+    }
+    vTaskDelay(pdMS_TO_TICKS(1000));  // Delay to free up CPU cycles
+  }
+}
+
+String msg;
+int receivedActivity = 0;
+int receivedPosture = 0;
+int sendReady = 0;
+
+void messageHandler(String &topic, String &payload) {
+  if (topic == subscribeTopic1) {
+    Serial.printf("From %s received message: %s\n", subscribeTopic1, payload.c_str());
+    if (strcmp(payload.c_str(), "computer") == 0) { activity = 1; }
+    if (strcmp(payload.c_str(), "reading") == 0) { activity = 2; }
+    if (strcmp(payload.c_str(), "sleeping") == 0) { activity = 3; }
+    if (strcmp(payload.c_str(), "not present") == 0) { activity = 4; }
+
+    Serial.println(activity);
+    loop_flag = 0;
+    receivedActivity = 1;
+  }
+
+  if (topic == subscribeTopic2) {
+    Serial.printf("From %s received message: %s\n", subscribeTopic2, payload.c_str());
+    if (strcmp(payload.c_str(), "good") == 0) { posture = 1; }
+    if (strcmp(payload.c_str(), "bad") == 0) { posture = 2; }
+
+    Serial.println(posture);
+    loop_flag = 0;
+    receivedPosture = 1;
+  }
+}
 
 
 //--------- Telegram BOT ---------------------
@@ -107,21 +179,18 @@ UniversalTelegramBot bot(BOTtoken, client);
 hw_timer_t *My_timer = NULL;
 int initiateConnect = 1;
 
-void onConnectionEstablishedCallback(esp_mqtt_client_handle_t client) {
-  vTaskDelay(10);
-}
-esp_err_t handleMQTT(esp_mqtt_event_handle_t event) {
-  mqttClient.onEventCallback(event);
-  return ESP_OK;
-}
+// void onConnectionEstablishedCallback(esp_mqtt_client_handle_t client) {
+//   vTaskDelay(10);
+// }
+// esp_err_t handleMQTT(esp_mqtt_event_handle_t event) {
+//   mqttClient.onEventCallback(event);
+//   return ESP_OK;
+// }
 void IRAM_ATTR onTimer() {
   initiateConnect = 1;
 }
 
-String msg;
-int receivedActivity = 0;
-int receivedPosture = 0;
-int sendReady = 0;
+
 
 //--------- MQTT handler ----------------------
 void handleMqtt(void *parameter) {
@@ -131,7 +200,7 @@ void handleMqtt(void *parameter) {
 
       // wait for WiFi connection
       WiFi.mode(WIFI_STA);
-      WiFi.begin(ssid, pass);
+      WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
       WiFi.setHostname("c3test");
       Serial.print("Connecting to WiFi");
       while (WiFi.status() != WL_CONNECTED) {
@@ -143,54 +212,35 @@ void handleMqtt(void *parameter) {
       }
 
       // wait for MQTT connection
-      log_i();
-      log_i("setup, ESP.getSdkVersion(): ");
-      log_i("%s", ESP.getSdkVersion());
-      mqttClient.enableDebuggingMessages();
-      mqttClient.setURI(server);
-      mqttClient.enableLastWillMessage("lwt", "I am going offline");
-      mqttClient.setKeepAlive(30);
-      mqttClient.loopStart();
-      Serial.print("Connecting to MQTT broker");
-      while (!mqttClient.isConnected()) {
-        Serial.println("Connecting to MQTT...");
-        vTaskDelay(100);
-        if (initiateConnect == 1) {
-          break;
-        }
-      }
+      // log_i();
+      // log_i("setup, ESP.getSdkVersion(): ");
+      // log_i("%s", ESP.getSdkVersion());
+      // mqttClient.enableDebuggingMessages();
+      // mqttClient.setURI(server);
+      // mqttClient.enableLastWillMessage("lwt", "I am going offline");
+      // mqttClient.setKeepAlive(30);
+      // mqttClient.loopStart();
+      // Serial.print("Connecting to MQTT broker");
+      // while (!mqttClient.isConnected()) {
+      //   Serial.println("Connecting to MQTT...");
+      //   vTaskDelay(100);
+      //   if (initiateConnect == 1) {
+      //     break;
+      //   }
+      // }
+      connectToAWS();
 
 
       Serial.println("Connected!");
 
 
-      while (mqttClient.isConnected()) {
-        if (sendReady == 0) {
-          msg = "Ready!";
-          mqttClient.publish("ready/bar", msg, 0, false);
-          Serial.println(msg);
-          sendReady = 1;
-        }
-        mqttClient.subscribe(subscribeTopic1, [](const String &payload) {
-          Serial.printf("From %s received message: %s\n", subscribeTopic1, payload.c_str());
-          if (strcmp(payload.c_str(), "computer") == 0) { activity = 1; }
-          if (strcmp(payload.c_str(), "reading") == 0) { activity = 2; }
-          if (strcmp(payload.c_str(), "sleeping") == 0) { activity = 3; }
-          if (strcmp(payload.c_str(), "not present") == 0) { activity = 4; }
-
-          Serial.println(activity);
-          loop_flag = 0;
-          receivedActivity = 1;
-        });
-        mqttClient.subscribe(subscribeTopic2, [](const String &payload) {
-          Serial.printf("From %s received message: %s\n", subscribeTopic2, payload.c_str());
-          if (strcmp(payload.c_str(), "good") == 0) { posture = 1; }
-          if (strcmp(payload.c_str(), "bad") == 0) { posture = 2; }
-
-          Serial.println(posture);
-          loop_flag = 0;
-          receivedPosture = 1;
-        });
+      while (mqttClient.connected()) {
+        // if (sendReady == 0) {
+        //   msg = "Ready!";
+        //   mqttClient.publish("ready/bar", msg, 0, false);
+        //   Serial.println(msg);
+        //   sendReady = 1;
+        // }
 
 
         if (receivedActivity && receivedPosture) {
@@ -206,7 +256,7 @@ void handleMqtt(void *parameter) {
           }
           receivedPosture = 0;
           receivedActivity = 0;
-          sendReady = 0;
+          //sendReady = 0;
         }
       }
       //vTaskDelete(NULL);
@@ -340,11 +390,11 @@ void setup() {
   xTaskCreatePinnedToCore(  // Use xTaskCreate() in vanilla FreeRTOS
     handleMqtt,             // Function to be called
     "Handle Mqtt",          // Name of task
-    4096,                   // Stack size (bytes in ESP32, words in FreeRTOS)
+    8192,                   // Stack size (bytes in ESP32, words in FreeRTOS)
     NULL,                   // Parameter to pass to function
     1,                      // Task priority (0 to configMAX_PRIORITIES - 1)
     NULL,                   // Task handle
-    tskNO_AFFINITY);        // Run on one core for demo purposes (ESP32 only)
+    0);        // Run on one core for demo purposes (ESP32 only)
 
   xTaskCreatePinnedToCore(  // Use xTaskCreate() in vanilla FreeRTOS
     handleLED,              // Function to be called
@@ -353,8 +403,9 @@ void setup() {
     NULL,                   // Parameter to pass to function
     1,                      // Task priority (0 to configMAX_PRIORITIES - 1)
     NULL,                   // Task handle
-    tskNO_AFFINITY);        // Run on one core for demo purposes (ESP32 only)
+    0);        // Run on one core for demo purposes (ESP32 only)
 
+  xTaskCreatePinnedToCore(mqttLoopTask, "MQTTTask", 10000, NULL, 1, NULL, 1);
   //connectWifiandMqtt();
   //vTaskDelete(NULL);
 
