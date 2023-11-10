@@ -15,14 +15,14 @@
 FASTLED_USING_NAMESPACE
 
 //--------- parameters for LED ---------------
-//#define DATA_PIN    5
+#define DATA_PIN    5
 #define LED_TYPE    WS2812
 #define COLOR_ORDER GRB
 #define NUM_LEDS    24
 CRGB leds[NUM_LEDS];
 
 //---------- test with single LED ------------
-#define LEDPIN    5 // testing with single LED
+//#define LEDPIN    5 // testing with single LED
 #define LEDCHANNEL 1
 #define LEDFREQ 5000
 #define LEDRESOLUTION 8
@@ -52,7 +52,6 @@ float max(float x, float y){
 Adafruit_SSD1306 display(OLED_RESET);
 
 void draw(const unsigned char* experession);
-
 
 int oled_state = 0;
 int interval = 200;
@@ -105,12 +104,12 @@ void setup() {
   delay(3000); 
 
   // tell FastLED about the LED strip configuration
-  //FastLED.addLeds<LED_TYPE,DATA_PIN,COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
+  FastLED.addLeds<LED_TYPE,DATA_PIN,COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
     
   // testing with single LED
-    ledcSetup(LEDCHANNEL, LEDFREQ, LEDRESOLUTION); 
-    ledcAttachPin(LEDPIN, LEDCHANNEL); 
-    ledcWrite(LEDCHANNEL, BRIGHTNESS);
+    //ledcSetup(LEDCHANNEL, LEDFREQ, LEDRESOLUTION); 
+    //ledcAttachPin(LEDPIN, LEDCHANNEL); 
+    //ledcWrite(LEDCHANNEL, BRIGHTNESS);
 
   // wait for WiFi connection
     WiFi.mode(WIFI_STA);
@@ -152,24 +151,25 @@ void setup() {
 void loop()
 { 
   BRIGHTNESS = max(96 + 0.5 * (600 - analogRead(PHOTO_PIN)), 0.0);
+  Serial.println(analogRead(PHOTO_PIN));
   // posture flag associated with LED light-up mode and brightness
   if (posture==0 || posture==1){
-      ledcWrite(LEDCHANNEL, BRIGHTNESS);
-      /*for( int i = 0; i < NUM_LEDS; i++) {leds[i] = CRGB::White;}
+      //ledcWrite(LEDCHANNEL, BRIGHTNESS);
+      for( int i = 0; i < NUM_LEDS; i++) {leds[i] = CRGB::White;}
       FastLED.setBrightness(BRIGHTNESS);
-      FastLED.show();*/
+      FastLED.show();
   }
   else if(posture==2){
     if(count%1000==0){
       bot.sendMessage(CHAT_ID, "Adjust your posture :)", "");
     }
-    ledcWrite(LEDCHANNEL, BRIGHTNESS);
-    /*for( int i = 0; i < NUM_LEDS; i++) {leds[i] = CRGB::Red;}
+    //ledcWrite(LEDCHANNEL, BRIGHTNESS);
+    for( int i = 0; i < NUM_LEDS; i++) {leds[i] = CRGB::Red;}
       FastLED.setBrightness(BRIGHTNESS);
-      FastLED.show();*/
+      FastLED.show();
     }
   else if(posture==3){
-      //for( int i = 0; i < NUM_LEDS; i++) {leds[i] = CRGB::White;}
+      for( int i = 0; i < NUM_LEDS; i++) {leds[i] = CRGB::White;}
       if(count%100==0){
         if(flag_up==1 && brightness<10){
           brightness++;
@@ -179,16 +179,16 @@ void loop()
           brightness--;
           if(brightness==0){flag_up=1;}
         }
-        ledcWrite(LEDCHANNEL, brightness);
-        /*FastLED.setBrightness(brightness);
-        FastLED.show();*/
+        //ledcWrite(LEDCHANNEL, brightness);
+        FastLED.setBrightness(brightness);
+        FastLED.show();
       }
     } 
   else if(posture==4){
     if(count%1000==0){
       bot.sendMessage(CHAT_ID, "Stop playing with your phone and get back to work!!!", "");
     }
-      //for( int i = 0; i < NUM_LEDS; i++) {leds[i] = CRGB::Red;}
+      for( int i = 0; i < NUM_LEDS; i++) {leds[i] = CRGB::Red;}
         if(flag_up==1 && brightness<254){
           brightness++;
           if(brightness==254){flag_up=0;}
@@ -197,14 +197,14 @@ void loop()
           brightness--;
           if(brightness==0){flag_up=1;}
         }
-        ledcWrite(LEDCHANNEL, brightness);
-        /*FastLED.setBrightness(brightness);
-        FastLED.show();*/
+        //ledcWrite(LEDCHANNEL, brightness);
+        FastLED.setBrightness(brightness);
+        FastLED.show();
     }
   else if(posture==5){
-    ledcWrite(LEDCHANNEL, 0);
-    /*FastLED.setBrightness(0);
-    FastLED.show();*/
+    //ledcWrite(LEDCHANNEL, 0);
+    FastLED.setBrightness(0);
+    FastLED.show();
   }
 
   // oled_state associated with OLED display mode
