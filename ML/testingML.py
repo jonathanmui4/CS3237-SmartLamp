@@ -5,8 +5,14 @@ import torch
 import torch.nn as nn
 from torchvision import models, transforms
 from torchvision.models import ResNet18_Weights
+import psutil
 
 # Function to load and transform an image
+def get_memory_usage():
+    process = psutil.Process()
+    memory_info = process.memory_info()
+    return f"Memory usage: {memory_info.rss / (1024 ** 2):.2f} MB"
+
 def load_image(image_path, transform):
     image = Image.open(image_path).convert('RGB')
     image = transform(image)
@@ -14,18 +20,21 @@ def load_image(image_path, transform):
     return image
 
 def test_activity():
+    model_reloaded = torch.jit.load('activity_detection.pt')
+    model_reloaded = model_reloaded.to('cpu')
+    print("Model loading: " + get_memory_usage())
     # Step 1: Recreate the original ResNet18 model
-    model_reloaded = models.resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
-
-    # Step 2: Modify the final layers to match the original changes
-    num_ftrs = model_reloaded.fc.in_features
-    model_reloaded.fc = nn.Linear(num_ftrs, 4)  # Match the number of classes
-
-    # Step 3: Load the saved state dictionary
-    # Map the device to cpu if it is online, else use the mac GPU
-    with open('activity_detection.pkl', 'rb') as f:
-        model_state = pickle.load(f)
-    model_reloaded.load_state_dict(model_state)
+    # model_reloaded = models.resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
+    #
+    # # Step 2: Modify the final layers to match the original changes
+    # num_ftrs = model_reloaded.fc.in_features
+    # model_reloaded.fc = nn.Linear(num_ftrs, 4)  # Match the number of classes
+    #
+    # # Step 3: Load the saved state dictionary
+    # # Map the device to cpu if it is online, else use the mac GPU
+    # with open('activity_detection.pkl', 'rb') as f:
+    #     model_state = pickle.load(f)
+    # model_reloaded.load_state_dict(model_state)
     # model_reloaded.load_state_dict(torch.load('activity_detection.pth', map_location=torch.device("mps" if torch.backends.mps.is_available() else "cpu")))
 
     # Step 4: Set the model to evaluation mode if you're doing inference
@@ -51,6 +60,7 @@ def test_activity():
             _, predicted = torch.max(outputs, 1)
             predicted_label = class_labels[predicted.item()]
             print(f"Image: {path}, Predicted class label: {predicted_label}")
+        print(get_memory_usage())
 
 def test_posture():
     # Step 1: Recreate the original ResNet18 model
