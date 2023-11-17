@@ -1,6 +1,2 @@
 requests
 boto3
-numpy
-Pillow
-torchvision
-torch
