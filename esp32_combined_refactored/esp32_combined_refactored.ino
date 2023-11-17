@@ -10,9 +10,8 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <MQTTClient.h>
-#include "secrets.h"  // AWS credentials and certificates
-#include "OLEDImages.h" // OLED expressions
-
+#include "secrets.h"     // AWS credentials and certificates
+#include "OLEDImages.h"  // OLED expressions
 
 FASTLED_USING_NAMESPACE
 
@@ -76,19 +75,28 @@ int receivedActivity = 0;
 int receivedPosture = 0;
 int sendReady = 0;
 
-// Telegram BOT parameters
-#define BOTtoken "6430964381:AAGG6iPYHaT3j_TpbavN9vLWBqhG9PN7pV8"  // your Bot Token (Get from Botfather)
-#define CHAT_ID "1169036837"
-WiFiClientSecure client;
-UniversalTelegramBot bot(BOTtoken, client);
-
 // RTOS parameters
 // this triggers the reconnection to WiFi after a specific period of time (via interrupt)
 hw_timer_t *My_timer = NULL;
-int initiateConnect = 1;
+int initiateConnect = 0;
+int connected = 0;
 
 void IRAM_ATTR onTimer() {
   initiateConnect = 1;
+}
+
+void connectToWiFi() {
+  Serial.println("Connecting to WiFi");
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print("Connecting Wifi...");
+  }
+  Serial.println("Connected to WiFi!");
 }
 
 void connectToAWS() {
@@ -97,12 +105,13 @@ void connectToAWS() {
   net.setCertificate(AWS_CERT_CRT);
   net.setPrivateKey(AWS_CERT_PRIVATE);
   // Connect to the MQTT broker on the AWS endpoint we defined earlier
+  Serial.println("Connect begin");
   mqttClient.begin(AWS_IOT_ENDPOINT, 8883, net);
   // create a call back to receive messages
   mqttClient.onMessage(messageHandler);
-  Serial.print("Connecting to AWS IoT");
+  Serial.println("Connecting to AWS IoT");
   while (!mqttClient.connect("ESP32_test")) {
-    Serial.print(".");
+    Serial.print("Connecting AWS...");
     vTaskDelay(100);
   }
   // Subscribe to a topic
@@ -112,6 +121,7 @@ void connectToAWS() {
 }
 
 void messageHandler(String &topic, String &payload) {
+  Serial.println("message received");
   if (topic == subscribeTopic1) {
     Serial.printf("From %s received message: %s\n", subscribeTopic1, payload.c_str());
     if (strcmp(payload.c_str(), "computer") == 0) { activity = 1; }
@@ -123,78 +133,59 @@ void messageHandler(String &topic, String &payload) {
     loop_flag = 0;
     receivedActivity = 1;
   }
-}
 
-//--------- MQTT Task
-void handleMqtt(void *parameter) {
-  while (1) {
-    if (initiateConnect == 1) {
-      initiateConnect = 0;
+    if (topic == subscribeTopic2) {
+    Serial.printf("From %s received message: %s\n", subscribeTopic2, payload.c_str());
+    if (strcmp(payload.c_str(), "good") == 0) { posture = 1; }
+    if (strcmp(payload.c_str(), "bad") == 0) { posture = 2; }
 
-      // wait for WiFi connection
-      WiFi.mode(WIFI_STA);
-      WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-      WiFi.setHostname("c3test");
-      Serial.print("Connecting to WiFi");
-      while (WiFi.status() != WL_CONNECTED) {
-        Serial.println("Connecting to wifi...");
-        vTaskDelay(100);
-        if (initiateConnect == 1) {
-          break;
-        }
-      }
-      
-      connectToAWS();
-
-      Serial.println("Connected!");
-
-      while (mqttClient.connect("ESP32_test")) {
-        // if (sendReady == 0) {
-        //   msg = "Ready!";
-        //   mqttClient.publish("ready/bar", msg, 0, false);
-        //   Serial.println(msg);
-        //   sendReady = 1;
-        // }
-
-        if (!mqttClient.connect("ESP32_test")) {
-            Serial.println("MQTT disconnected.");
-            //connectToAWS();  // Reconnect to AWS
-            } else {
-            Serial.println("MQTT connected.");
-            mqttClient.loop();
-        }
-
-        if (receivedActivity && receivedPosture) {
-          Serial.println("Received!");
-          if (posture == 2 && activity != 3 && activity != 4) {
-            bot.sendMessage(CHAT_ID, "Adjust your posture", "");
-            vTaskDelay(500);
-          }
-          WiFi.disconnect();
-          while (WiFi.status() == WL_CONNECTED) {
-            vTaskDelay(1);
-            Serial.print("Wifi Disconnecting...");
-          }
-          receivedPosture = 0;
-          receivedActivity = 0;
-          //sendReady = 0;
-        }
-      }
-      //vTaskDelete(NULL);
-    }
-    // if (!mqttClient.connect("ESP32_test")) {
-    //   Serial.println("MQTT disconnected.");
-    //   //connectToAWS();  // Reconnect to AWS
-    // } else {
-    //   Serial.println("MQTT connected.");
-    //   mqttClient.loop();
-    // }
-    vTaskDelay(1);
+    Serial.println(posture);
+    loop_flag = 0;
+    receivedPosture = 1;
   }
 }
 
-// LED Task
+void handleLoop(void *parameter) {
+  Serial.println("handleLoop running");
+  for (;;) {
+    if (!mqttClient.connected()) {
+      Serial.println("MQTT disconnected. Attempting to reconnect...");
+      //connectToAWS();  // Reconnect to AWS
+    } else {
+      Serial.println("MQTT connected.");
+      mqttClient.loop();
+    }
+    vTaskDelay(pdMS_TO_TICKS(1000));
+  }
+}
+
+void handleConnect(void *parameter) {
+  Serial.println("handleConnect running");
+  while (1) {
+    while (WiFi.status() == WL_CONNECTED) {
+      Serial.println("Start of delay");
+      vTaskDelay(10000);
+      Serial.println("End of delay");
+      mqttClient.disconnect();
+      Serial.println("mqttClient disconnected");
+      WiFi.disconnect();
+      Serial.println("Wifi disconnected");
+    }
+
+    if (initiateConnect == 1 && WiFi.status() != WL_CONNECTED) {
+      initiateConnect = 0;
+      Serial.println("If statement entered");
+      connectToWiFi();
+      Serial.println("Wifi connected");
+      connectToAWS();
+      Serial.println("mqttClient connected");
+    }
+    vTaskDelay(100);
+  }
+}
+
 void handleLED(void *parameter) {
+  Serial.println("handleLED running");
   while (1) {
     BRIGHTNESS = max(96 + 0.5 * (600 - analogRead(PHOTO_PIN)), 0.0);
     //Not present
@@ -282,35 +273,26 @@ void handleLED(void *parameter) {
 
 void setup() {
   Serial.begin(115200);
-  delay(3000);  
 
+  // tell FastLED about the LED strip configuration
+  FastLED.addLeds<LED_TYPE, DATA_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
 
+  // initialize OLED
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the 64x48)
+  display.clearDisplay();
   My_timer = timerBegin(0, 80, true);
   timerAttachInterrupt(My_timer, &onTimer, true);
   timerAlarmWrite(My_timer, 1000000 * 20, true);
   timerAlarmEnable(My_timer);  //Just Enable
 
-  // tell FastLED about the LED strip configuration
-  FastLED.addLeds<LED_TYPE, DATA_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
-  //FastLED.addLeds<LED_TYPE,DATA_PIN,CLK_PIN,COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
+  connectToWiFi();
+  connectToAWS();
 
-  // telegram bot start up
-  client.setCACert(TELEGRAM_CERTIFICATE_ROOT);  // Add root certificate for api.telegram.org
-  bot.sendMessage(CHAT_ID, "Bot started up", "");
-
-  // initialize OLED
-  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the 64x48)
-  display.clearDisplay(); 
-
-  // run MQTT task
-  xTaskCreatePinnedToCore(handleMqtt, "HandleMQTT", 8192, NULL, 1, NULL, 0);
-  xTaskCreatePinnedToCore(handleLED, "HandleLED", 4096, NULL, 1, NULL, 1);
-
-  delay(10000);
-  
+  xTaskCreatePinnedToCore(handleLoop, "LoopTask", 10000, NULL, 1, NULL, 1);
+  xTaskCreatePinnedToCore(handleLED, "HandleLED", 4096, NULL, 1, NULL, 0);
+  xTaskCreatePinnedToCore(handleConnect, "HandleConnect", 10000, NULL, 1, NULL, 0);
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-
 }

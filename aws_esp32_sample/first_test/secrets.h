@@ -3,8 +3,8 @@
 #define SECRET
 #define THINGNAME "ESP32_test" // do not change this!
 
-const char *WIFI_SSID = "";
-const char *WIFI_PASSWORD = "";
+const char *WIFI_SSID = "haihong";
+const char *WIFI_PASSWORD = "yuhaihong";
 const char *AWS_IOT_ENDPOINT = "aawcyrj2l1ta4-ats.iot.ap-southeast-1.amazonaws.com";
 
 // Amazon Root CA 1
