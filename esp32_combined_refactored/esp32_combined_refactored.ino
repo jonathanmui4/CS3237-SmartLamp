@@ -122,12 +122,28 @@ void connectToAWS() {
 
 void messageHandler(String &topic, String &payload) {
   Serial.println("message received");
+
+  StaticJsonDocument<512> doc;
+  DeserializationError error = deserializeJson(doc, payload);
+  if (error) {
+    Serial.print("deserializeJson() failed: ");
+    Serial.println(error.c_str());
+    return;
+  }
+
+  const char* message = doc["message"];
+
+  if (!message) {
+      Serial.println("message is null!");
+  }
+
   if (topic == subscribeTopic1) {
     Serial.printf("From %s received message: %s\n", subscribeTopic1, payload.c_str());
-    if (strcmp(payload.c_str(), "computer") == 0) { activity = 1; }
-    if (strcmp(payload.c_str(), "reading") == 0) { activity = 2; }
-    if (strcmp(payload.c_str(), "sleeping") == 0) { activity = 3; }
-    if (strcmp(payload.c_str(), "not present") == 0) { activity = 4; }
+
+    if (strcmp(message, "computer_use") == 0) { activity = 1; }
+    if (strcmp(message, "reading") == 0) { activity = 2; }
+    if (strcmp(message, "asleep") == 0) { activity = 3; }
+    if (strcmp(message, "not_present") == 0) { activity = 4; }
 
     Serial.println(activity);
     loop_flag = 0;
@@ -135,9 +151,9 @@ void messageHandler(String &topic, String &payload) {
   }
 
     if (topic == subscribeTopic2) {
-    Serial.printf("From %s received message: %s\n", subscribeTopic2, payload.c_str());
-    if (strcmp(payload.c_str(), "good") == 0) { posture = 1; }
-    if (strcmp(payload.c_str(), "bad") == 0) { posture = 2; }
+    Serial.printf("From %s received message: %s\n", subscribeTopic2, message);
+    if (strcmp(message, "good_posture") == 0) { posture = 1; }
+    if (strcmp(message, "bad_posture") == 0) { posture = 2; }
 
     Serial.println(posture);
     loop_flag = 0;
@@ -290,7 +306,7 @@ void setup() {
 
   xTaskCreatePinnedToCore(handleLoop, "LoopTask", 10000, NULL, 1, NULL, 1);
   xTaskCreatePinnedToCore(handleLED, "HandleLED", 4096, NULL, 1, NULL, 0);
-  xTaskCreatePinnedToCore(handleConnect, "HandleConnect", 10000, NULL, 1, NULL, 0);
+  xTaskCreatePinnedToCore(handleConnect, "HandleConnect", 10000, NULL, 1, NULL, 1);
 }
 
 void loop() {
