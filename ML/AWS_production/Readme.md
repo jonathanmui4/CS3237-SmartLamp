@@ -16,3 +16,5 @@ Files in AWS_production
 2) AWSLambdaClassification.py : Retrieves the latest image from the S3 Bucket and sends an API Request to an AWS Lightsail instance to get the classification results as the response. Send this result to a AWS UIT Core MQTT Topic, Store in a Google Firestore Database and send a notification to Telegram Bot (If bad posture detected).
 
 3) firebaseToExcelConverter.py : Retrieves all the data collected from the Google Firestore Database and converts this data into a Microsoft Excel sheet for ML Training etc...
+
+4) DockerFile : Contains the details and requirements to build the docker image
