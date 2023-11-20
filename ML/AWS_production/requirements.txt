@@ -1,2 +1,5 @@
 requests
 boto3
+Pillow
+firebase-admin
+python-telegram-bot
