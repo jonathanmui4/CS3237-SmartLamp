@@ -9,12 +9,26 @@ Deploying Docker image to AWS lambda
 `docker push docker push [user-id].dkr.ecr.[region].amazonaws.com/[repo-name]:latest`
 
 
-Files in AWS_production
+## Files in AWS_production
 
-1) AWSImageDecoder.py : Listens to the AWS IOT Core MQTT Topic to receive the encoded base64 bytes from ESP32 Camera to decodes and convert the bytes into a image. Store this image into a S3 Bucket.
+1. **AWSImageDecoder.py**
+    - Listens to the AWS IoT Core MQTT Topic to receive encoded base64 bytes from ESP32 Camera.
+    - Decodes and converts the bytes into an image.
+    - Stores the image into an S3 Bucket.
 
-2) AWSLambdaClassification.py : Retrieves the latest image from the S3 Bucket and sends an API Request to an AWS Lightsail instance to get the classification results as the response. Send this result to a AWS UIT Core MQTT Topic, Store in a Google Firestore Database and send a notification to Telegram Bot (If bad posture detected).
+2. **AWSLambdaClassification.py**
+    - Retrieves the latest image from the S3 Bucket.
+    - Sends an API Request to an AWS Lightsail instance to get classification results.
+    - Sends the result to an AWS IoT Core MQTT Topic.
+    - Stores the result in a Google Firestore Database.
+    - Sends a notification to Telegram Bot if bad posture is detected.
 
-3) firebaseToExcelConverter.py : Retrieves all the data collected from the Google Firestore Database and converts this data into a Microsoft Excel sheet for ML Training etc...
+3. **firebaseToExcelConverter.py**
+    - Retrieves all data collected from the Google Firestore Database.
+    - Converts this data into a Microsoft Excel sheet for ML Training, etc.
 
-4) DockerFile : Contains the details and requirements to build the docker image
+4. **Dockerfile**
+    - Contains the dependencies and instructions to build the Docker image.
+
+5. **requirements.txt**
+    - Contains the libraries required to build the Docker image.
