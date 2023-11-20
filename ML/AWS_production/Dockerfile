@@ -5,7 +5,10 @@ COPY requirements.txt ./
 RUN python3.8 -m pip install -r requirements.txt
 
 # Copy the function code and model weights to the image.
-COPY img_classify.py ./
+COPY AWSLambdaClassification.py ./
+
+# Copy the Firebase credentials file into the image
+COPY FirebaseCredentuals.json ./
 
 # Set the CMD to your handler (could also be done as a parameter override outside of the Dockerfile)
-CMD ["img_classify.lambda_handler"]
+CMD ["AWSLambdaClassification.lambda_handler"]
