@@ -90,8 +90,6 @@ void connectToWiFi() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
-
-
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print("Connecting Wifi...");
@@ -142,7 +140,7 @@ void messageHandler(String &topic, String &payload) {
 
     if (strcmp(message, "computer_use") == 0) { activity = 1; }
     if (strcmp(message, "reading") == 0) { activity = 2; }
-    if (strcmp(message, "asleep") == 0) { activity = 3; }
+    if (strcmp(message, "asleep") == 0) { activity = 3; brightness=0; flag_up=1;}
     if (strcmp(message, "not_present") == 0) { activity = 4; }
 
     Serial.println(activity);
@@ -153,7 +151,7 @@ void messageHandler(String &topic, String &payload) {
     if (topic == subscribeTopic2) {
     Serial.printf("From %s received message: %s\n", subscribeTopic2, message);
     if (strcmp(message, "good_posture") == 0) { posture = 1; }
-    if (strcmp(message, "bad_posture") == 0) { posture = 2; }
+    if (strcmp(message, "bad_posture") == 0) { posture = 2; brightness=0; flag_up=1;}
 
     Serial.println(posture);
     loop_flag = 0;
@@ -203,7 +201,7 @@ void handleConnect(void *parameter) {
 void handleLED(void *parameter) {
   Serial.println("handleLED running");
   while (1) {
-    BRIGHTNESS = max(96 + 0.5 * (600 - analogRead(PHOTO_PIN)), 0.0);
+    BRIGHTNESS = max(96 + 1 * (600 - analogRead(PHOTO_PIN)), 0.0);
     //Not present
     if (activity == 4) {
       // Turn off all the LEDS.

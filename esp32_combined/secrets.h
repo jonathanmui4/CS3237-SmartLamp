@@ -1,12 +1,11 @@
 // All confidential information has been removed; this file acts as a placeholder
-
 #include <pgmspace.h>
 
 #define SECRET
-#define THINGNAME "ESP32_test"
+#define THINGNAME "ESP32_test" // do not change this!
 
 const char *WIFI_SSID = "XXX";
-const char *WIFI_PASSWORD = "XXX;
+const char *WIFI_PASSWORD = "XXX";
 const char *AWS_IOT_ENDPOINT = "XXX";
 
 // Amazon Root CA 1
